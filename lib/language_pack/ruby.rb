@@ -95,6 +95,7 @@ class LanguagePack::Ruby < LanguagePack::Base
         create_database_yml
         install_binaries
         run_assets_precompile_rake_task
+        run_database_migrate_task
       end
       super
     end
@@ -722,6 +723,28 @@ params = CGI.parse(uri.query || "")
       msg << "Attempted to access a nonexistent database:\n"
       msg << "https://devcenter.heroku.com/articles/pre-provision-database\n"
     end
+    error msg
+  end
+
+  def run_database_migrate_task
+    instrument 'ruby.run_database_migrate_task' do
+      migrate = rake.task("db:migrate")
+      return true unless migrate.is_defined?
+
+      topic "Migrating database"
+      migrate.invoke(env: rake_env)
+      if migrate.success?
+        puts "Database migration completed (#{"%.2f" % migrate.time}s)"
+      else
+        migrate_fail(migrate.output)
+      end
+    end
+  end
+
+  def migrate_fail(output)
+    log "db_migrate", :status => "failure"
+    msg = "Database migration failed.\n"
+    msg << output.to_s
     error msg
   end
 
